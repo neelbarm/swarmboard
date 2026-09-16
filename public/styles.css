@@ -145,6 +145,8 @@ body::before {
 .controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -327,7 +329,6 @@ select.control {
 
 .swarm svg {
   display: block;
-  min-width: 100%;
 }
 
 .swarm .edge {

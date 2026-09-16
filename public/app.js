@@ -432,12 +432,15 @@ function renderSwarm(agents) {
       (hidden > 0 ? ` · ${hidden} older fan-out${hidden === 1 ? '' : 's'} hidden` : ''),
   );
 
-  const available = Math.max(560, el.swarm.clientWidth - 24);
-  const rootW = 300;
-  const gap = 62;
-  const childW = Math.max(240, Math.min(620, available - rootW - gap - 24));
+  // Below tablet width the tree still scrolls horizontally, but shrinking the
+  // boxes keeps most of the fan-out on screen instead of one node and six stubs.
+  const compact = el.swarm.clientWidth < 700;
+  const available = Math.max(compact ? 430 : 560, el.swarm.clientWidth - 24);
+  const rootW = compact ? 200 : 300;
+  const gap = compact ? 34 : 62;
+  const childW = Math.max(compact ? 200 : 240, available - rootW - gap - 24);
   const signature =
-    `${childW}|` +
+    `${childW}:${rootW}|` +
     groups
       .map((g) => `${g.node.id}:${g.node.status}>${g.children.map((c) => `${c.id}:${c.status}`).join(',')}`)
       .join(';');
@@ -472,8 +475,10 @@ function renderSwarm(agents) {
   const height = y - groupGap + padTop;
   const width = 12 + rootW + gap + childW + 12;
 
-  const root = svg('svg', { width: '100%', height: String(height), viewBox: `0 0 ${width} ${height}` });
-  root.setAttribute('preserveAspectRatio', 'xMinYMin meet');
+  // Explicit pixel dimensions rather than width:100% + viewBox scaling: a scaled
+  // SVG keeps its declared height and leaves dead space under the diagram. Narrow
+  // viewports scroll the container instead.
+  const root = svg('svg', { width: String(width), height: String(height), viewBox: `0 0 ${width} ${height}` });
 
   let delay = 0;
   for (const { group, y: top, blockH } of layout) {
