@@ -1,0 +1,42 @@
+{
+  "name": "swarmboard",
+  "version": "0.1.0",
+  "description": "Live local dashboard for Claude Code agent swarms, built from the session transcripts already on your disk.",
+  "type": "module",
+  "bin": {
+    "swarmboard": "dist/src/cli.js"
+  },
+  "main": "dist/src/index.js",
+  "files": [
+    "dist",
+    "public",
+    "fixtures",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/postbuild.mjs",
+    "start": "node dist/src/cli.js",
+    "demo": "npm run build && node dist/src/cli.js --dir fixtures",
+    "stats": "node dist/src/cli.js stats",
+    "fixtures": "node dist/src/fixtures.js",
+    "test": "npm run build && node --test dist/test/"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agents",
+    "dashboard",
+    "observability",
+    "swarm"
+  ],
+  "author": "Neel Barmecha",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
