@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>swarmboard</title>
+    <meta
+      name="description"
+      content="Live local dashboard for Claude Code agent swarms, read from the session transcripts on this machine."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='7' r='4' fill='%237d8cff'/%3E%3Ccircle cx='6' cy='25' r='3.4' fill='%2332d74b'/%3E%3Ccircle cx='16' cy='25' r='3.4' fill='%2332d74b'/%3E%3Ccircle cx='26' cy='25' r='3.4' fill='%230a84ff'/%3E%3Cg stroke='%23556' stroke-width='1.4' fill='none'%3E%3Cpath d='M16 11v4M16 15H6v6M16 15h10v6M16 15v6'/%3E%3C/g%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <h1>swarmboard</h1>
+          <span class="root" id="root-path" title=""></span>
+          <span class="badge demo" id="demo-badge" hidden>demo fixtures</span>
+        </div>
+        <div class="spacer"></div>
+        <div class="controls">
+          <button class="control" id="filter-recent" type="button" aria-pressed="true">
+            Last 24h
+          </button>
+          <button class="control" id="filter-active" type="button" aria-pressed="false">
+            Active only
+          </button>
+          <select class="control" id="filter-project" aria-label="Filter by project">
+            <option value="">All projects</option>
+          </select>
+          <span class="live" id="live" data-state="connecting">
+            <span class="beacon"></span>
+            <span class="label">connecting</span>
+          </span>
+        </div>
+      </header>
+
+      <section class="stats" id="stats" aria-label="Totals"></section>
+
+      <section class="section" id="swarm-section" hidden>
+        <div class="section-head">
+          <h2>Swarm</h2>
+          <span class="hint" id="swarm-hint"></span>
+        </div>
+        <div class="swarm" id="swarm"></div>
+      </section>
+
+      <div class="main">
+        <section class="section" style="margin-bottom: 0">
+          <div class="section-head">
+            <h2>Agents</h2>
+            <span class="hint" id="agents-hint"></span>
+          </div>
+          <div class="grid" id="grid"></div>
+          <div class="empty" id="empty" hidden>
+            No sessions here yet. Start a Claude Code session and this fills in on its own.
+          </div>
+          <p class="note">
+            Costs are estimates from a built-in list-price table, not a bill. Everything is read
+            from disk on this machine; swarmboard makes no network calls.
+          </p>
+        </section>
+
+        <aside class="feed-wrap">
+          <div class="feed-head">
+            <h2>Activity</h2>
+            <span class="badge" id="feed-count">0</span>
+          </div>
+          <ul class="feed" id="feed"></ul>
+        </aside>
+      </div>
+    </div>
+
+    <div class="scrim" id="scrim"></div>
+    <aside class="drawer" id="drawer" aria-hidden="true" aria-label="Agent detail">
+      <div class="drawer-head">
+        <span class="dot" id="drawer-dot"></span>
+        <div style="min-width: 0">
+          <h2 id="drawer-title">Agent</h2>
+          <span class="sub" id="drawer-sub"></span>
+        </div>
+        <button class="close" id="drawer-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="drawer-body" id="drawer-body"></div>
+    </aside>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
