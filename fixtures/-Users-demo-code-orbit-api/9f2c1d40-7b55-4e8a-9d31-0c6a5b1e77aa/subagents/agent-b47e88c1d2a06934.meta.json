@@ -1,0 +1,1 @@
+{"agentType":"general-purpose","description":"Rewrite the rate limiter with a token bucket","toolUseId":"toolu_fixture_rate_02","spawnDepth":1,"requestShape":"background","model":"sonnet"}
