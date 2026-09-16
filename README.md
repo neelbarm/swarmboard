@@ -23,7 +23,7 @@ workflow. You keep working exactly as you do now and the board fills in.
 ## 60-second quickstart
 
 ```bash
-git clone <this repo> && cd swarmboard
+git clone https://github.com/neelbarm/swarmboard && cd swarmboard
 npm install
 npm run build
 npm start
