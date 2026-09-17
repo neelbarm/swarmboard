@@ -1,5 +1,5 @@
 # docs
 
-`screenshot.png` is referenced from the project README. Drop a capture of the dashboard
-here (http://localhost:4141 after `npm start`, or `npm run demo` for synthetic data) to
-fill it in.
+`screenshot.png` is the dashboard capture referenced from the project README. To retake
+it, run `npm run demo` and capture http://localhost:4141 — demo mode serves the synthetic
+`fixtures/` tree, so a screenshot taken that way carries no real prompts or paths.

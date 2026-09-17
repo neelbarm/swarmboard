@@ -22,6 +22,8 @@ workflow. You keep working exactly as you do now and the board fills in.
 
 ## 60-second quickstart
 
+Needs Node 22 or newer.
+
 ```bash
 git clone https://github.com/neelbarm/swarmboard && cd swarmboard
 npm install
@@ -53,7 +55,7 @@ never mistaken for live data.
   animated edges, so a six-way fan-out is obvious at a glance.
 - **Per-agent detail** — a timeline of every tool call with the command or file path it used,
   a deduplicated list of files touched with counts, and the latest assistant message.
-- **Activity feed** — every tool call across every agent, newest first.
+- **Activity feed** — tool calls across every agent, newest first, to a depth of 200.
 - **Filters** — last 24 hours (on by default, because a laptop accumulates months of
   transcripts), active only, and by project.
 
