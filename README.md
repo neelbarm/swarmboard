@@ -4,6 +4,8 @@
 
 ![swarmboard](docs/screenshot.png)
 
+![swarmboard in motion](docs/demo.gif)
+
 ## Why
 
 When you fan a Claude Code session out into six parallel subagents, you lose the thing you
