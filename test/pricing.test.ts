@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rateFor, estimateCost, formatUSD, FALLBACK_RATE } from '../src/pricing.js';
-import { parseSince, compactTokens, renderTable } from '../src/stats.js';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { parseSince, compactTokens, renderTable, runStats } from '../src/stats.js';
 import { parseArgs, DEFAULT_PORT } from '../src/cli.js';
 
 test('rateFor matches a model family and falls back for anything unknown', () => {
@@ -109,4 +112,44 @@ test('parseArgs reports bad input instead of guessing', () => {
   assert.match(parseArgs(['--limit', '0']).error ?? '', /limit/);
   assert.match(parseArgs(['--nope']).error ?? '', /unknown option/);
   assert.match(parseArgs(['frobnicate']).error ?? '', /unknown command/);
+});
+
+test('the stats table strips control bytes that arrive in transcript text', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'swarmboard-ansi-'));
+  const dir = path.join(root, '-repo-demo');
+  await fsp.mkdir(dir, { recursive: true });
+  const session = 'cccccccc-dddd-eeee-ffff-000000000000';
+  // A transcript can hold any bytes at all. Echoing an escape sequence straight to
+  // the terminal would let one repaint or relabel the table around it.
+  const esc = String.fromCharCode(27);
+  await fsp.writeFile(
+    path.join(dir, `${session}.jsonl`),
+    [
+      JSON.stringify({ type: 'custom-title', customTitle: `${esc}[2J${esc}[31mPWNED`, sessionId: session }),
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: new Date().toISOString(),
+        sessionId: session,
+        cwd: '/repo/demo',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-5',
+          usage: { output_tokens: 3 },
+          content: [{ type: 'tool_use', id: 'k1', name: `Bash${esc}[1;44m`, input: { command: 'echo hi' } }],
+        },
+      }),
+    ].join('\n') + '\n',
+  );
+
+  let out = '';
+  await runStats(
+    { root, sinceMs: null, project: null, activeOnly: false, limit: 50 },
+    (s) => {
+      out += s;
+    },
+  );
+  await fsp.rm(root, { recursive: true, force: true });
+
+  assert.ok(out.includes('PWNED'), 'the text itself still shows');
+  assert.ok(!out.includes(esc), 'but no escape byte reaches the terminal');
 });

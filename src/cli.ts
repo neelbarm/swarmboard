@@ -1,5 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { startServer } from './server.js';
 import { runStats, parseSince } from './stats.js';
@@ -168,11 +169,18 @@ export async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
-  const isFixtures = args.demo || path.basename(args.root) === 'fixtures';
-  if (isFixtures && args.root === FIXTURES_DIR) {
+  // Only the bundled fixtures get the demo badge: a user directory that happens to
+  // be called `fixtures` holds real transcripts and must not be labelled synthetic.
+  const isFixtures = args.demo || args.root === FIXTURES_DIR;
+  if (isFixtures) {
     // Demo transcripts carry timestamps relative to now, so a stale checkout would
     // render as a board of idle agents. Regenerate when they have gone cold.
     await ensureFreshFixtures(args.root);
+  } else if (!existsSync(args.root)) {
+    process.stderr.write(
+      `swarmboard: ${args.root} does not exist — the board will stay empty.\n` +
+        `            Pass --dir <path> to point at your projects directory.\n\n`,
+    );
   }
   const server = await startServer({
     root: args.root,

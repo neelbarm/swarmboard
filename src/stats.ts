@@ -39,7 +39,7 @@ function topTools(agent: AgentNode, max = 3): string {
   if (entries.length === 0) return '—';
   return entries
     .slice(0, max)
-    .map(([name, count]) => `${name}:${count}`)
+    .map(([name, count]) => `${truncate(name, 22)}:${count}`)
     .join(' ');
 }
 
@@ -141,14 +141,18 @@ export async function runStats(opts: StatsOptions, write: (s: string) => void): 
         : agent.status === 'finished'
           ? color('●', BLUE, useColor)
           : color('○', YELLOW, useColor);
-    const label =
-      (depth ? '└─ ' : '') +
-      (agent.description || agent.title || `${agent.kind} ${agent.id.slice(0, 8)}`);
+    // An unlabelled subagent is identified by its own agentId; `agent.id` is
+    // `<sessionId>/<agentId>`, whose first 8 characters are the parent's.
+    const fallbackName =
+      agent.kind === 'subagent'
+        ? `agent ${(agent.agentId ?? '').slice(0, 8)}`
+        : `session ${agent.sessionId.slice(0, 8)}`;
+    const label = (depth ? '└─ ' : '') + (agent.description || agent.title || fallbackName);
     return [
       `${dot} ${truncate(label, 42)}`,
       agent.status,
       truncate(agent.projectName, 22),
-      (agent.model ?? '—').replace(/^claude-/, ''),
+      truncate((agent.model ?? '—').replace(/^claude-/, ''), 24),
       String(agent.toolCalls),
       topTools(agent),
       compactTokens(agent.tokens.input + agent.tokens.cacheCreate + agent.tokens.cacheRead),
@@ -196,6 +200,10 @@ export async function runStats(opts: StatsOptions, write: (s: string) => void): 
 }
 
 function truncate(s: string, n: number): string {
-  const flat = s.replace(/\s+/g, ' ').trim();
+  // Titles, tool names and project paths all come from transcript content, which is
+  // arbitrary text. Strip C0/C1 control bytes before they reach the terminal so a
+  // stray escape sequence in a transcript cannot repaint or relabel the table.
+  // eslint-disable-next-line no-control-regex
+  const flat = s.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').replace(/\s+/g, ' ').trim();
   return flat.length > n ? `${flat.slice(0, n - 1)}…` : flat;
 }

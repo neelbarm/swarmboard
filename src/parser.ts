@@ -63,13 +63,13 @@ export function summarizeTool(
     case 'Write':
     case 'NotebookEdit': {
       const file = str('file_path') ?? str('notebook_path');
-      return { detail: file ? shortPath(file) : '', file };
+      return { detail: file ? clip(shortPath(file), 180) : '', file };
     }
     case 'Edit': {
       const file = str('file_path');
       const old = str('old_string');
       const detail = file
-        ? `${shortPath(file)}${old ? ` — ${clip(old, 60)}` : ''}`
+        ? clip(`${shortPath(file)}${old ? ` — ${clip(old, 60)}` : ''}`, 180)
         : clip(old ?? '', 100);
       return { detail, file };
     }
@@ -99,7 +99,7 @@ export function summarizeTool(
     }
     default: {
       const file = str('file_path') ?? str('path') ?? null;
-      if (file) return { detail: shortPath(file), file };
+      if (file) return { detail: clip(shortPath(file), 180), file };
       for (const key of ['command', 'query', 'description', 'prompt', 'url', 'pattern', 'text', 'skill']) {
         const v = str(key);
         if (v) return { detail: clip(v, 180), file: null };
