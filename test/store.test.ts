@@ -302,3 +302,61 @@ test('a missing root directory does not throw', async () => {
   assert.equal(store.snapshot().agents.length, 0);
   store.close();
 });
+
+test('a read that lands mid-character does not corrupt the line', async () => {
+  const root = await tmpRoot();
+  const dir = path.join(root, '-repo-demo');
+  await fsp.mkdir(dir, { recursive: true });
+  const file = path.join(dir, `${SESSION}.jsonl`);
+
+  // Non-ASCII is ordinary in transcripts: em dashes, CJK, emoji. A tail read ends at
+  // the current file size, which lands inside a multi-byte sequence whenever the
+  // writer is part way through one.
+  const text = 'héllo 日本語 ✅ done';
+  const line = assistantLine('2026-09-16T10:00:00.000Z', [{ type: 'text', text }]) + '\n';
+  const bytes = Buffer.from(line, 'utf8');
+  const mid = bytes.indexOf(Buffer.from([0xe6, 0x97, 0xa5])) + 1; // one byte into 日
+
+  await fsp.writeFile(file, bytes.subarray(0, mid));
+  const store = new SwarmStore({ root });
+  await store.refresh();
+  assert.equal(store.snapshot().agents[0]?.lastText ?? null, null, 'a partial line is held back');
+
+  await fsp.appendFile(file, bytes.subarray(mid));
+  await store.refresh();
+  const agent = store.snapshot().agents[0];
+  store.close();
+
+  assert.equal(agent?.lastText, text, 'the split character survives the read boundary');
+  await fsp.rm(root, { recursive: true, force: true });
+});
+
+test('a rewritten file drops the activity it published the first time round', async () => {
+  const root = await tmpRoot();
+  const dir = path.join(root, '-repo-demo');
+  await fsp.mkdir(dir, { recursive: true });
+  const file = path.join(dir, `${SESSION}.jsonl`);
+  const call = (ts: string, cmd: string) =>
+    assistantLine(ts, [{ type: 'tool_use', id: cmd, name: 'Bash', input: { command: cmd } }]);
+
+  await fsp.writeFile(
+    file,
+    [call('2026-09-16T10:00:00.000Z', 'one'), call('2026-09-16T10:01:00.000Z', 'two')].join('\n') + '\n',
+  );
+  const store = new SwarmStore({ root });
+  await store.refresh();
+  assert.equal(store.snapshot().activity.length, 2);
+
+  await fsp.writeFile(file, call('2026-09-16T10:02:00.000Z', 'three') + '\n');
+  await store.refresh();
+  const activity = store.snapshot().activity;
+  store.close();
+
+  assert.deepEqual(
+    activity.map((a) => a.detail),
+    ['three'],
+    'tool calls that are no longer in the file are gone from the feed',
+  );
+  assert.equal(new Set(activity.map((a) => a.id)).size, activity.length, 'ids stay unique');
+  await fsp.rm(root, { recursive: true, force: true });
+});

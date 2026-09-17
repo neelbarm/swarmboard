@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
+import { StringDecoder } from 'node:string_decoder';
 import {
   TranscriptState,
   parseLine,
@@ -38,6 +39,13 @@ interface TrackedFile {
   offset: number;
   /** Bytes left over from the last read that did not end in a newline. */
   pending: string;
+  /**
+   * Holds an incomplete multi-byte UTF-8 sequence across reads. A read ends at the
+   * current file size, which lands mid-character whenever the writer is part way
+   * through an em dash, an emoji or any CJK text; decoding each chunk on its own
+   * would turn those bytes into U+FFFD and silently corrupt or drop the line.
+   */
+  decoder: StringDecoder;
   mtimeMs: number;
   size: number;
   /** How many timeline entries have already been published to the activity feed. */
@@ -214,11 +222,24 @@ export class SwarmStore extends EventEmitter {
       meta,
       offset: 0,
       pending: '',
+      decoder: new StringDecoder('utf8'),
       mtimeMs: 0,
       size: 0,
       publishedSeq: -1,
     });
     return true;
+  }
+
+  /** Forget everything read from a transcript that was truncated or rewritten. */
+  private resetTracked(t: TrackedFile): void {
+    t.offset = 0;
+    t.pending = '';
+    t.decoder = new StringDecoder('utf8');
+    t.state = new TranscriptState();
+    t.publishedSeq = -1;
+    // Those activity entries describe tool calls that are no longer in the file, and
+    // replaying from seq 0 would otherwise mint ids that collide with them.
+    this.activity = this.activity.filter((item) => item.agentId !== t.id);
   }
 
   /** Read whatever has been appended since the last read. */
@@ -234,10 +255,7 @@ export class SwarmStore extends EventEmitter {
 
     if (stat.size < t.offset) {
       // Truncated or rewritten: start over rather than emit garbage.
-      t.offset = 0;
-      t.pending = '';
-      t.state = new TranscriptState();
-      t.publishedSeq = -1;
+      this.resetTracked(t);
     }
     if (stat.size === t.offset) return mtimeChanged;
 
@@ -248,7 +266,9 @@ export class SwarmStore extends EventEmitter {
       const length = stat.size - t.offset;
       const buf = Buffer.allocUnsafe(length);
       const { bytesRead } = await handle.read(buf, 0, length, t.offset);
-      text = buf.subarray(0, bytesRead).toString('utf8');
+      // Decoded through the per-file decoder so a trailing partial character is
+      // carried into the next read instead of becoming U+FFFD.
+      text = t.decoder.write(buf.subarray(0, bytesRead));
       t.offset += bytesRead;
     } catch {
       return mtimeChanged;

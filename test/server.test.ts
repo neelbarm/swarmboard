@@ -93,7 +93,7 @@ test('the static handler refuses to walk out of the public directory', async () 
 
 test('the SSE stream sends a snapshot on connect and again when a file grows', async () => {
   const root = await fixtureRoot();
-  const server = await startServer({ root, port: 0 });
+  const server = await startServer({ root, port: 0, label: 'demo fixtures' });
   const controller = new AbortController();
 
   try {
@@ -128,6 +128,7 @@ test('the SSE stream sends a snapshot on connect and again when a file grows', a
     const first = await readSnapshots(1, 5000);
     assert.equal(first.length, 1, 'a snapshot arrives immediately on connect');
     assert.equal((first[0] as { agents: unknown[] }).agents.length, 1);
+    assert.equal((first[0] as { label: string | null }).label, 'demo fixtures');
 
     // Append a second tool call; the watcher should push an updated snapshot.
     await fsp.appendFile(
@@ -150,6 +151,13 @@ test('the SSE stream sends a snapshot on connect and again when a file grows', a
     assert.equal(next.length, 1, 'an append pushes a new snapshot');
     const agent = (next[0] as { agents: Array<{ toolCalls: number }> }).agents[0];
     assert.equal(agent?.toolCalls, 2, 'the pushed snapshot reflects the appended line');
+    // The browser hides the demo badge on any snapshot without a label, so a push
+    // that drops it silently relabels synthetic fixtures as live data.
+    assert.equal(
+      (next[0] as { label: string | null }).label,
+      'demo fixtures',
+      'every push carries the label, not just the first',
+    );
   } finally {
     controller.abort();
     await server.close();
@@ -188,5 +196,27 @@ test('the generated demo fixtures parse into one planner and three subagents', a
     }
   } finally {
     await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('a port that is already taken fails fast and leaves nothing running', async () => {
+  const root = await fixtureRoot();
+  const first = await startServer({ root, port: 0 });
+  try {
+    const before = process.getActiveResourcesInfo().length;
+    await assert.rejects(
+      () => startServer({ root, port: first.port }),
+      /already in use/,
+      'the second bind reports the clash in plain words',
+    );
+    // The failed attempt starts a store, and an open fs.watch holds the event loop
+    // open: if it is not closed the CLI prints the error and then hangs forever.
+    // Handles report as active until they finish closing, so let them settle.
+    await new Promise((r) => setTimeout(r, 300));
+    const after = process.getActiveResourcesInfo().length;
+    assert.ok(after <= before, `the failed server left ${after - before} handle(s) behind`);
+  } finally {
+    await first.close();
+    await fsp.rm(root, { recursive: true, force: true });
   }
 });

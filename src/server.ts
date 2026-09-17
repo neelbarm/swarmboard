@@ -44,9 +44,14 @@ export async function startServer(opts: ServerOptions): Promise<RunningServer> {
   const clients = new Set<http.ServerResponse>();
   let latest: Snapshot = store.snapshot();
 
+  // The browser hides the "demo fixtures" badge whenever a snapshot arrives without
+  // a label, so every push has to carry it — not just the one sent on connect.
+  const label = opts.label ?? null;
+  const labelled = (snap: Snapshot) => ({ ...snap, label });
+
   store.on('change', (snap: Snapshot) => {
     latest = snap;
-    broadcast(clients, 'snapshot', snap);
+    broadcast(clients, 'snapshot', labelled(snap));
   });
   store.on('warn', () => {
     /* transient fs errors are expected while agents write; the next pass recovers */
@@ -55,7 +60,7 @@ export async function startServer(opts: ServerOptions): Promise<RunningServer> {
   // Status flips to idle purely from the passage of time, so push on a slow tick too.
   const heartbeat = setInterval(() => {
     latest = store.snapshot();
-    broadcast(clients, 'snapshot', latest);
+    broadcast(clients, 'snapshot', labelled(latest));
   }, 15_000);
   heartbeat.unref?.();
 
@@ -65,7 +70,7 @@ export async function startServer(opts: ServerOptions): Promise<RunningServer> {
 
     if (pathname === '/api/snapshot') {
       latest = store.snapshot();
-      return sendJSON(res, 200, { ...latest, label: opts.label ?? null });
+      return sendJSON(res, 200, labelled(latest));
     }
     if (pathname === '/api/health') {
       return sendJSON(res, 200, {
@@ -83,18 +88,33 @@ export async function startServer(opts: ServerOptions): Promise<RunningServer> {
       return sendJSON(res, 200, agent);
     }
     if (pathname === '/api/stream') {
-      return openStream(req, res, clients, store, opts.label ?? null);
+      return openStream(req, res, clients, store, label);
     }
     return serveStatic(pathname, res);
   });
 
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(opts.port, host, () => {
-      server.removeListener('error', reject);
-      resolve();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(opts.port, host, () => {
+        server.removeListener('error', reject);
+        resolve();
+      });
     });
-  });
+  } catch (err) {
+    // The store is already watching the projects directory, and an open fs.watch
+    // keeps the event loop alive: without this the process prints the error and
+    // then hangs forever instead of exiting.
+    clearInterval(heartbeat);
+    store.close();
+    server.close();
+    if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+      throw new Error(
+        `port ${opts.port} is already in use — is swarmboard already running? Try --port ${opts.port + 1}`,
+      );
+    }
+    throw err;
+  }
 
   const address = server.address();
   const port = typeof address === 'object' && address ? address.port : opts.port;
