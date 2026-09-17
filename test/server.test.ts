@@ -4,7 +4,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { startServer } from '../src/server.js';
-import { writeFixtures } from '../src/fixtures.js';
+import { writeFixtures, ensureFreshFixtures, newestTimestamp } from '../src/fixtures.js';
 
 const SESSION = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
@@ -218,5 +218,57 @@ test('a port that is already taken fails fast and leaves nothing running', async
   } finally {
     await first.close();
     await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a freshly cloned fixtures tree is regenerated, not trusted for being new', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'swarmboard-clone-'));
+  try {
+    await writeFixtures(dir);
+
+    const project = (await fsp.readdir(dir)).find((n) => n.startsWith('-'))!;
+    const session = (await fsp.readdir(path.join(dir, project))).find((n) => n.endsWith('.jsonl'))!;
+    const sessionFile = path.join(dir, project, session);
+
+    // Age the transcript content by a day, then stamp every file as touched right
+    // now, which is what `git clone` does to a checkout.
+    const aged = (await fsp.readFile(sessionFile, 'utf8')).replace(
+      /"timestamp":"([^"]+)"/g,
+      (_m, iso: string) => `"timestamp":"${new Date(Date.parse(iso) - 86_400_000).toISOString()}"`,
+    );
+    await fsp.writeFile(sessionFile, aged);
+    const now = new Date();
+    await fsp.utimes(sessionFile, now, now);
+
+    const staleByContent = newestTimestamp(aged);
+    assert.ok(staleByContent !== null && Date.now() - staleByContent > 60_000, 'content is stale');
+
+    await ensureFreshFixtures(dir);
+
+    const rewritten = await fsp.readFile(sessionFile, 'utf8');
+    const newest = newestTimestamp(rewritten);
+    assert.ok(newest !== null, 'the rewritten transcript still carries timestamps');
+    assert.ok(
+      Date.now() - (newest as number) < 60_000,
+      'a new mtime must not pass off day-old transcripts as live',
+    );
+
+    const server = await startServer({ root: dir, port: 0, label: 'demo fixtures' });
+    try {
+      const snap = await getJSON(`${server.url}/api/snapshot`);
+      const statuses = snap.agents
+        .filter((a: { kind: string }) => a.kind === 'subagent')
+        .map((a: { status: string }) => a.status)
+        .sort();
+      assert.deepEqual(
+        statuses,
+        ['active', 'active', 'finished'],
+        'the demo still reads as two running and one reported back',
+      );
+    } finally {
+      await server.close();
+    }
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
   }
 });

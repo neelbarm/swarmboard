@@ -3,5 +3,5 @@ export { TranscriptState, parseLine, summarizeTool, decodeProjectDir, shortPath 
 export { estimateCost, rateFor, formatUSD, emptyTokens } from './pricing.js';
 export { startServer } from './server.js';
 export { runStats, parseSince } from './stats.js';
-export { writeFixtures, ensureFreshFixtures, FIXTURES_DIR } from './fixtures.js';
+export { writeFixtures, ensureFreshFixtures, newestTimestamp, FIXTURES_DIR } from './fixtures.js';
 export type * from './types.js';

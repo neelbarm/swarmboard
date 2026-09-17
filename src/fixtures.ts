@@ -382,12 +382,28 @@ export async function writeFixtures(dir = FIXTURES_DIR): Promise<{ dir: string; 
   return { dir, files: files.length };
 }
 
+/** The newest `timestamp` written into a transcript, or null if it has none. */
+export function newestTimestamp(text: string): number | null {
+  let newest: number | null = null;
+  for (const m of text.matchAll(/"timestamp":"([^"]+)"/g)) {
+    const when = Date.parse(m[1] as string);
+    if (Number.isFinite(when) && (newest === null || when > newest)) newest = when;
+  }
+  return newest;
+}
+
 /** Rewrite the fixtures when they are old enough that everything would read as idle. */
 export async function ensureFreshFixtures(dir = FIXTURES_DIR): Promise<void> {
   try {
     const session = path.join(dir, PROJECT_DIR, `${SESSION_ID}.jsonl`);
-    const stat = await fsp.stat(session);
-    if (Date.now() - stat.mtimeMs < 60_000) return;
+    // Judge staleness by what the transcript says, not by the file's mtime: a clone
+    // or a checkout stamps these files with the moment they hit the disk, so the
+    // mtime reads "fresh" while the timestamps inside are from whenever they were
+    // committed. That is exactly the case where regenerating matters, because the
+    // board would otherwise show four green "active" agents last seen hours ago.
+    const text = await fsp.readFile(session, 'utf8');
+    const newest = newestTimestamp(text);
+    if (newest !== null && Date.now() - newest < 60_000) return;
   } catch {
     /* missing or unreadable: regenerate */
   }
